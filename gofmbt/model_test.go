@@ -16,6 +16,7 @@ package gofmbt
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -233,11 +234,55 @@ func TestSearchPathsTestSteps(t *testing.T) {
 	}
 }
 
+type MyState string
+
+func (ms MyState) String() string {
+	return string(ms)
+}
+
+func gotoMyState(nextState string) StateChange {
+	return func(_ State) State {
+		return MyState(nextState)
+	}
+}
+
+func TestPaths(t *testing.T) {
+	model := NewModel()
+	model.From(func(s State) []*Transition {
+		ms := s.(MyState)
+		return When(true,
+			When(ms == "start", OnAction("a").Do(gotoMyState("A"))),
+			When(ms == "start", OnAction("b").Do(gotoMyState("B"))),
+			When(ms == "B", OnAction("c").Do(gotoMyState("start"))),
+		)
+	})
+	expectedTraces := map[string]int{
+		"a":     1,
+		"bca":   1,
+		"bcbca": 1,
+		"bcbcb": 1,
+	}
+	w := NewWalker(model)
+	for path := range w.IterPaths(MyState("start"), 5) {
+		trace := strings.Join(ActionNames(path), "")
+		t.Log("actions:", trace)
+		expectedTraces[trace] -= 1
+	}
+	for trace, count := range expectedTraces {
+		if count > 0 {
+			t.Fatalf("expected trace %q to be found %d times, got 0", trace, count)
+		}
+		if count < 0 {
+			t.Fatalf("expected trace %q to be found 0 times, got %d", trace, -count)
+		}
+	}
+}
+
 func BenchmarkPathsSmallStateSpace(b *testing.B) {
 	for modelName, model := range playerModels {
 		state := &PlayerState{false, 1}
 		depth := 12
-		paths := model.Paths(state, depth)
+		paths := NewWalker(model).Paths(state, depth)
 		b.Log("found", len(paths), "paths of depth", depth, "from", modelName)
 	}
 }

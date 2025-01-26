@@ -254,30 +254,37 @@ func (c *Coverer) SetBestPathRandom(seed int64, randomness int) {
 	c.randomness = randomness
 }
 
-func (c *Coverer) ShufflePaths(paths []Path) {
-	if c.rand == nil {
-		return
+func (c *Coverer) stepShuffler() StepFilter {
+	return func(steps []*Step) []*Step {
+		if c.rand != nil {
+			c.rand.Shuffle(len(steps), func(i, j int) {
+				steps[i], steps[j] = steps[j], steps[i]
+			})
+		}
+		return steps
 	}
-	c.rand.Shuffle(len(paths), func(i, j int) {
-		paths[i], paths[j] = paths[j], paths[i]
-	})
 }
 
 func (c *Coverer) BestPath(m Walkable, s State, maxLen int) (Path, *CoverageIncreaseStats) {
 	var best *CoverageIncreaseStats
 	var bestPath Path
-	paths := m.Paths(s, maxLen)
-	if c.randomness != BestPathRandomNone {
-		c.ShufflePaths(paths)
+	updateBest := func(newPath Path, newEst *CoverageIncreaseStats) {
+		bestPath = make(Path, len(newPath))
+		copy(bestPath, newPath)
+		best = newEst
 	}
-	for _, path := range paths {
+	w := NewWalker(m)
+	if c.randomness != BestPathRandomNone {
+		w.SetStepFilter(c.stepShuffler())
+	}
+	for path := range w.IterPaths(s, maxLen) {
 		est := c.EstimateCoverageIncrease(path)
 		// only return paths that increase coverage
 		if est.MaxIncrease == 0 {
 			continue
 		}
 		if best == nil {
-			bestPath, best = path, est
+			updateBest(path, est)
 			if c.randomness >= BestPathRandomAmongAnyPath {
 				break
 			}
@@ -287,7 +294,7 @@ func (c *Coverer) BestPath(m Walkable, s State, maxLen int) (Path, *CoverageIncr
 			continue
 		}
 		if est.MaxIncrease > best.MaxIncrease {
-			bestPath, best = path, est
+			updateBest(path, est)
 			continue
 		}
 		// if we are here, est.MaxIncrease == best.MaxIncrease
@@ -299,7 +306,7 @@ func (c *Coverer) BestPath(m Walkable, s State, maxLen int) (Path, *CoverageIncr
 			continue
 		}
 		if est.MaxStep < best.MaxStep {
-			bestPath, best = path, est
+			updateBest(path, est)
 			continue
 		}
 		// if we are here, est.MaxStep == best.MaxStep
@@ -311,7 +318,7 @@ func (c *Coverer) BestPath(m Walkable, s State, maxLen int) (Path, *CoverageIncr
 			continue
 		}
 		if est.FirstStep < best.FirstStep {
-			bestPath, best = path, est
+			updateBest(path, est)
 			continue
 		}
 		// if we are here, est.FirstStep == best.FirstStep
@@ -319,7 +326,7 @@ func (c *Coverer) BestPath(m Walkable, s State, maxLen int) (Path, *CoverageIncr
 			continue
 		}
 		if est.FirstIncrease > best.FirstIncrease {
-			bestPath, best = path, est
+			updateBest(path, est)
 			continue
 		}
 		// If we are here, est.FirstIncrease ==
@@ -328,7 +335,7 @@ func (c *Coverer) BestPath(m Walkable, s State, maxLen int) (Path, *CoverageIncr
 		// been taken care of by shuffling paths in the
 		// beginning.
 	}
-	if len(bestPath) == 0 {
+	if best == nil {
 		return nil, nil
 	}
 	return bestPath, best

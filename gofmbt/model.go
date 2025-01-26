@@ -14,19 +14,11 @@
 
 package gofmbt
 
-// Walkable models can be explored: which steps can be taken next,
-// what paths are possible. Yet paths can be constructed through
-// repeated "which steps" calls, they are included in the interface
-// separately to enable selective caching. For instance, path cache
-// can be implemented as a walkable object that caches Paths calls
-// directly without a step-by-step state cache.
+// Walkable models can be traversed step-by-step from state to state.
 type Walkable interface {
 	// StepsFrom returns all alternative steps that start from a
 	// given state.
 	StepsFrom(s State) []*Step
-	// Paths returns all alternative paths of at most maxLen steps
-	// that start from a given state.
-	Paths(s State, maxLen int) []Path
 }
 
 // Model specifies a state space.
@@ -62,28 +54,4 @@ func (m *Model) StepsFrom(s State) []*Step {
 		}
 	}
 	return steps
-}
-
-// Paths returns all alternative paths of at most maxLen steps
-// that start from a given state.
-func (m *Model) Paths(s State, maxLen int) []Path {
-	paths := []Path{}
-	if maxLen == 0 {
-		return nil
-	}
-	for _, step := range m.StepsFrom(s) {
-		newPath := NewPath(step)
-		childPaths := m.Paths(step.EndState(), maxLen-1)
-		if len(childPaths) == 0 {
-			paths = append(paths, newPath)
-		} else {
-			for _, childPath := range childPaths {
-				paths = append(paths, append(newPath, childPath...))
-			}
-		}
-	}
-	if len(paths) == 0 {
-		return nil
-	}
-	return paths
 }
