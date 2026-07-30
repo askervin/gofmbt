@@ -83,7 +83,7 @@ func main() {
 			fmt.Printf("# %d: coverage: %d, state: %s, test: %s\n", stepCount, coverer.Coverage(), step.StartState(), step.Action())
 			coverer.MarkCovered(step)
 			coverer.UpdateCoverage()
+			state = step.EndState().(*PlayerState)
 		}
-		state = path[stats.FirstStep].EndState().(*PlayerState)
 	}
 }
