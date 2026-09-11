@@ -16,6 +16,7 @@ package gofmbt
 
 import (
 	"fmt"
+	"reflect"
 )
 
 // Action, associated with a state change, specifies what to execute
@@ -24,6 +25,8 @@ type Action struct {
 	name   string
 	format string
 	args   []interface{}
+	fn     any   // registered function
+	fnArgs []any // arguments to pass when invoking fn
 }
 
 // NewAction creates a new action.
@@ -33,6 +36,34 @@ func NewAction(format string, args ...interface{}) *Action {
 		args:   args,
 		name:   fmt.Sprintf(format, args...),
 	}
+}
+
+// WithTest associates fn and its call arguments with this action.
+// Both are stored and can later be invoked together by calling Test.
+func (a *Action) WithTest(fn any, args ...any) *Action {
+	a.fn = fn
+	a.fnArgs = args
+	return a
+}
+
+// Test calls the function registered with WithTest, passing the
+// stored arguments. Returns the function's return values as a slice,
+// or nil if no function has been registered.
+func (a *Action) Test() []any {
+	if a.fn == nil {
+		return nil
+	}
+	fnVal := reflect.ValueOf(a.fn)
+	argVals := make([]reflect.Value, len(a.fnArgs))
+	for i, arg := range a.fnArgs {
+		argVals[i] = reflect.ValueOf(arg)
+	}
+	results := fnVal.Call(argVals)
+	out := make([]any, len(results))
+	for i, r := range results {
+		out[i] = r.Interface()
+	}
+	return out
 }
 
 // String returns a string representation of an action.
